@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-canvas: #F4F3EE;
+  --lime-accent: #E4F65B;
+  --olive-deep: #223309;
+  --charcoal-ink: #1A1B18;
+  --stone-surface: #E5E4DE;
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--charcoal-ink);
+  font-family: var(--font-plus-jakarta-sans), system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.015em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+/* Tabular figures for numbers, timers, metrics */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Diagonal striped progress bar */
+.progress-diagonal-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(26, 27, 24, 0.9),
+    rgba(26, 27, 24, 0.9) 8px,
+    rgba(26, 27, 24, 0.7) 8px,
+    rgba(26, 27, 24, 0.7) 16px
+  );
+  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.progress-diagonal-stripes-lime {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #E4F65B,
+    #E4F65B 8px,
+    #D4E64A 8px,
+    #D4E64A 16px
+  );
+  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Organic Paper Texture / Wave Pattern overlay */
+.surface-organic-wave {
+  background-image: radial-gradient(circle at 100% 100%, rgba(34, 51, 9, 0.08) 0, transparent 40%),
+                    radial-gradient(circle at 0% 0%, rgba(228, 246, 91, 0.15) 0, transparent 50%);
+}
+
+.surface-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.025'/%3E%3C/svg%3E");
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(26, 27, 24, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(26, 27, 24, 0.3);
+}
+
+/* Hide scrollbar for clean horizontal snap carousels */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

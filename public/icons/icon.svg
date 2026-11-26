@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="128" fill="#223309" />
+  <!-- Tactile Organic Accent Wave -->
+  <path d="M 96 360 C 180 320, 220 400, 320 340 C 380 300, 420 330, 440 310" stroke="#E4F65B" stroke-width="24" stroke-linecap="round" fill="none" opacity="0.4" />
+  <!-- Main Symbol: Elingno Sound-Pulse 'E' & Checkmark Hybrid -->
+  <g transform="translate(136, 116)">
+    <!-- Base geometric block -->
+    <rect x="0" y="0" width="60" height="280" rx="30" fill="#E4F65B" />
+    <rect x="0" y="0" width="220" height="56" rx="28" fill="#E4F65B" />
+    <rect x="0" y="112" width="160" height="56" rx="28" fill="#E4F65B" />
+    <rect x="0" y="224" width="240" height="56" rx="28" fill="#E4F65B" />
+    <!-- Dynamic sound dot -->
+    <circle cx="210" cy="140" r="22" fill="#E4F65B" />
+  </g>
+</svg>
