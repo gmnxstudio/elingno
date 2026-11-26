@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, type GenerationConfig } from "@google/generative-ai";
 import { db, ensureSchema } from "@/db";
 import { categories } from "@/db/schema";
 
@@ -49,50 +49,49 @@ export async function POST(req: NextRequest) {
     let rawMime = audio.type || "audio/webm";
     const cleanMime = rawMime.split(";")[0].trim() || "audio/webm";
 
-    // 3. Initialize Gemini 2.5 Flash
+    // 3. Initialize Gemini
     const genAI = new GoogleGenerativeAI(geminiApiKey);
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: SchemaType.OBJECT,
-          properties: {
-            rawTranscript: {
-              type: SchemaType.STRING,
-              description:
-                "Transkripsi kata-per-kata (verbatim) bahasa Indonesia dari audio rekaman. Tulis semua angka, kuantitas, pengukuran, mata uang, dan satuan dalam format numerik presisi (contoh: 53,5 kg, 243V, 1200 sak, 300 m3, pukul 09.00, Rp 1.500.000). Istilah teknis: rafia, extruder, pelletizing, PP, PE, PET, PVC, karung, tonase, voltase, ampere, inverter, VFD, timbangan, shift, gudang, maintenance, dinamo, bearing, SIPA, SKPD.",
-            },
-            title: {
-              type: SchemaType.STRING,
-              description: "Maksimal 6 kata, judul operasional tegas, informatif, dan padat.",
-            },
-            categoryId: {
-              type: SchemaType.STRING,
-              description: "Pilih ID divisi/kategori yang paling tepat dari daftar kategori yang disediakan.",
-            },
-            formattedContent: {
-              type: SchemaType.STRING,
-              description:
-                "Poin-poin markdown bahasa Indonesia yang bersih dan rapi. Hapus kata pengisi (eee, anu, terus). JANGAN PERNAH mengubah, membulatkan, atau menghilangkan angka, satuan, waktu, uang, atau kuantitas apapun.",
-            },
-            priority: {
-              type: SchemaType.STRING,
-              format: "enum",
-              enum: ["normal", "high"],
-              description: "Infer 'high' jika ada kata atau nada urgent, penting, segera, rusak, berhenti, bocor, bahaya.",
-            },
-            dueDateISO: {
-              type: SchemaType.STRING,
-              description:
-                "ISO 8601 string waktu jatuh tempo (WIB +07:00). Terjemahkan ekspresi waktu relatif seperti 'besok jam 9 pagi', 'hari sabtu', 'lusa sore', atau 'tanggal 5' relatif terhadap currentDateISO. Jika tidak disebutkan batas waktu, kembalikan string kosong.",
-            },
+    const schemaConfig: GenerationConfig = {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: SchemaType.OBJECT,
+        properties: {
+          rawTranscript: {
+            type: SchemaType.STRING,
+            description:
+              "Transkripsi kata-per-kata (verbatim) bahasa Indonesia dari audio rekaman. Tulis semua angka, kuantitas, pengukuran, mata uang, dan satuan dalam format numerik presisi (contoh: 53,5 kg, 243V, 1200 sak, 300 m3, pukul 09.00, Rp 1.500.000). Istilah teknis: rafia, extruder, pelletizing, PP, PE, PET, PVC, karung, tonase, voltase, ampere, inverter, VFD, timbangan, shift, gudang, maintenance, dinamo, bearing, SIPA, SKPD.",
           },
-          required: ["rawTranscript", "title", "categoryId", "formattedContent", "priority"],
+          title: {
+            type: SchemaType.STRING,
+            description: "Maksimal 6 kata, judul operasional tegas, informatif, dan padat.",
+          },
+          categoryId: {
+            type: SchemaType.STRING,
+            description: "Pilih ID divisi/kategori yang paling tepat dari daftar kategori yang disediakan.",
+          },
+          formattedContent: {
+            type: SchemaType.STRING,
+            description:
+              "Poin-poin markdown bahasa Indonesia yang bersih dan rapi. Hapus kata pengisi (eee, anu, terus). JANGAN PERNAH mengubah, membulatkan, atau menghilangkan angka, satuan, waktu, uang, atau kuantitas apapun.",
+          },
+          priority: {
+            type: SchemaType.STRING,
+            format: "enum",
+            enum: ["normal", "high"],
+            description: "Infer 'high' jika ada kata atau nada urgent, penting, segera, rusak, berhenti, bocor, bahaya.",
+          },
+          dueDateISO: {
+            type: SchemaType.STRING,
+            description:
+              "ISO 8601 string waktu jatuh tempo (WIB +07:00). Terjemahkan ekspresi waktu relatif seperti 'besok jam 9 pagi', 'hari sabtu', 'lusa sore', atau 'tanggal 5' relatif terhadap currentDateISO. Jika tidak disebutkan batas waktu, kembalikan string kosong.",
+          },
         },
+        required: ["rawTranscript", "title", "categoryId", "formattedContent", "priority"],
       },
-      systemInstruction: `Anda adalah sekretaris eksekutif operasional pabrik dan industri manufaktur di Indonesia ("Elingno").
+    };
+
+    const systemInstruction = `Anda adalah sekretaris eksekutif operasional pabrik dan industri manufaktur di Indonesia ("Elingno").
 Anda menerima rekaman audio suara langsung dari operator / manajer lapangan di lantai produksi yang bising.
 
 TUGAS ANDA:
@@ -101,8 +100,7 @@ TUGAS ANDA:
 3. Pilih divisi/kategori (categoryId) HANYA dari daftar kategori yang valid: ${JSON.stringify(categoryCatalog)}.
 4. Susun catatan terstruktur (formattedContent) dalam bentuk poin-poin markdown bersih (•), singkirkan kata ragu/pengisi seperti 'eee', 'anu', 'apa itu'. PERTAHANKAN SEMUA ANGKA DAN METRIK DENGAN PRESISI 100%.
 5. Tentukan priority ('normal' atau 'high' jika darurat/rusak/urgent).
-6. Tentukan dueDateISO jika pekerja menyebutkan batas waktu penyelesaian, dihitung relatif terhadap currentDateISO di zona waktu Asia/Jakarta (WIB +07:00).`,
-    });
+6. Tentukan dueDateISO jika pekerja menyebutkan batas waktu penyelesaian, dihitung relatif terhadap currentDateISO di zona waktu Asia/Jakarta (WIB +07:00).`;
 
     const audioPart = {
       inlineData: {
@@ -117,7 +115,30 @@ ${JSON.stringify(categoryCatalog, null, 2)}
 
 Analisis audio rekaman suara operasional terlampir dan berikan output JSON terstruktur sesuai schema.`;
 
-    const result = await model.generateContent([audioPart, textPrompt]);
+    const candidateModels = ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-flash-latest"];
+    let result = null;
+    let lastError: unknown = null;
+
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: schemaConfig,
+          systemInstruction,
+        });
+
+        result = await model.generateContent([audioPart, textPrompt]);
+        if (result) break;
+      } catch (err: unknown) {
+        lastError = err;
+        console.warn(`Model ${modelName} unavailable, falling back...`, (err as Error)?.message);
+      }
+    }
+
+    if (!result) {
+      throw lastError || new Error("Gemini API service unavailable");
+    }
+
     const responseText = result.response.text();
     const parsed = JSON.parse(responseText);
 

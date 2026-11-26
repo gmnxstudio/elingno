@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, type GenerationConfig } from "@google/generative-ai";
 import { db, ensureSchema } from "@/db";
 import { categories } from "@/db/schema";
 
@@ -57,51 +57,48 @@ export async function POST(req: NextRequest) {
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
 
-    // Use gemini-2.5-flash with fallback to gemini-1.5-flash if needed
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: SchemaType.OBJECT,
-          properties: {
-            title: {
-              type: SchemaType.STRING,
-              description: "Maksimal 6 kata, judul operasional tegas dan padat.",
-            },
-            categoryId: {
-              type: SchemaType.STRING,
-              description: "Pilih ID divisi/kategori yang paling tepat dari daftar yang disediakan.",
-            },
-            formattedContent: {
-              type: SchemaType.STRING,
-              description:
-                "Poin-poin markdown bahasa Indonesia yang bersih dan rapi. Hapus kata pengisi (eee, anu, terus). JANGAN PERNAH mengubah, membulatkan, atau menghilangkan angka, satuan, waktu, uang, atau kuantitas apapun.",
-            },
-            priority: {
-              type: SchemaType.STRING,
-              format: "enum",
-              enum: ["normal", "high"],
-              description: "Infer 'high' jika ada kata urgent, penting, segera, rusak, berhenti, bahaya.",
-            },
-            dueDateISO: {
-              type: SchemaType.STRING,
-              description:
-                "ISO 8601 string waktu jatuh tempo (WIB +07:00). Terjemahkan ekspresi waktu relatif seperti 'besok jam 9 pagi', 'hari sabtu', 'lusa sore', atau 'tanggal 5' relatif terhadap currentDateISO. Jika tidak disebutkan batas waktu, kembalikan string kosong.",
-            },
+    const schemaConfig: GenerationConfig = {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: SchemaType.OBJECT,
+        properties: {
+          title: {
+            type: SchemaType.STRING,
+            description: "Maksimal 6 kata, judul operasional tegas dan padat.",
           },
-          required: ["title", "categoryId", "formattedContent", "priority"],
+          categoryId: {
+            type: SchemaType.STRING,
+            description: "Pilih ID divisi/kategori yang paling tepat dari daftar yang disediakan.",
+          },
+          formattedContent: {
+            type: SchemaType.STRING,
+            description:
+              "Poin-poin markdown bahasa Indonesia yang bersih dan rapi. Hapus kata pengisi (eee, anu, terus). JANGAN PERNAH mengubah, membulatkan, atau menghilangkan angka, satuan, waktu, uang, atau kuantitas apapun.",
+          },
+          priority: {
+            type: SchemaType.STRING,
+            format: "enum",
+            enum: ["normal", "high"],
+            description: "Infer 'high' jika ada kata urgent, penting, segera, rusak, berhenti, bahaya.",
+          },
+          dueDateISO: {
+            type: SchemaType.STRING,
+            description:
+              "ISO 8601 string waktu jatuh tempo (WIB +07:00). Terjemahkan ekspresi waktu relatif seperti 'besok jam 9 pagi', 'hari sabtu', 'lusa sore', atau 'tanggal 5' relatif terhadap currentDateISO. Jika tidak disebutkan batas waktu, kembalikan string kosong.",
+          },
         },
+        required: ["title", "categoryId", "formattedContent", "priority"],
       },
-      systemInstruction: `Anda adalah sekretaris eksekutif operasional pabrik dan industri manufaktur di Indonesia ("Elingno").
+    };
+
+    const systemInstruction = `Anda adalah sekretaris eksekutif operasional pabrik dan industri manufaktur di Indonesia ("Elingno").
 Tugas Anda merapikan transkrip suara kasar pekerja/manajer pabrik menjadi catatan kerja terstruktur dan presisi.
 
 ATURAN WAJIB:
 1. Angka, kuantitas, satuan ukur (kg, m3, sak, Volt, Ampere, bar, °C, RPM, ton, rupiah) dan nomor mesin/part HARUS DIPERTAHANKAN 100% PERSIS DAN PRESISI.
 2. Format formattedContent dalam bullet points (•) bahasa Indonesia profesional tanpa kata-kata ragu (eee, anu, mmm, apa itu).
 3. dueDateISO: jika diucapkan waktu (misal "tolong dicek besok sebelum jam 10 pagi", "selesaikan hari jumat"), hitung tanggal ISO dari currentDateISO di zona waktu Asia/Jakarta (WIB). Jika tidak ada batas waktu, kosongkan.
-4. Pilih categoryId HANYA dari daftar kategori yang valid: ${JSON.stringify(categoryCatalog)}.`,
-    });
+4. Pilih categoryId HANYA dari daftar kategori yang valid: ${JSON.stringify(categoryCatalog)}.`;
 
     const prompt = `Tanggal & Waktu Saat Ini: ${currentDateISO || new Date().toISOString()} (Timezone Offset: ${timezoneOffset || "+07:00"})
 Daftar Kategori Tersedia:
@@ -110,7 +107,30 @@ ${JSON.stringify(categoryCatalog, null, 2)}
 Transkrip Suara:
 "${transcript}"`;
 
-    const result = await model.generateContent(prompt);
+    const candidateModels = ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-flash-latest"];
+    let result = null;
+    let lastError: unknown = null;
+
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: schemaConfig,
+          systemInstruction,
+        });
+
+        result = await model.generateContent(prompt);
+        if (result) break;
+      } catch (err: unknown) {
+        lastError = err;
+        console.warn(`Model ${modelName} unavailable, falling back...`, (err as Error)?.message);
+      }
+    }
+
+    if (!result) {
+      throw lastError || new Error("Gemini API service unavailable");
+    }
+
     const responseText = result.response.text();
     const parsed = JSON.parse(responseText);
 
