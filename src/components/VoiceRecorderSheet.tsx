@@ -45,7 +45,6 @@ export function VoiceRecorderSheet({
 
   // Pipeline states
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStage, setProcessingStage] = useState<"" | "transcribing" | "structuring">("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isOfflineSaved, setIsOfflineSaved] = useState(false);
 
@@ -91,7 +90,6 @@ export function VoiceRecorderSheet({
     setDurationMs(0);
     setWaveformData(null);
     setIsProcessing(false);
-    setProcessingStage("");
     setErrorMsg(null);
     setIsOfflineSaved(false);
     setReviewReady(false);
@@ -144,7 +142,6 @@ export function VoiceRecorderSheet({
 
     try {
       setIsProcessing(true);
-      setProcessingStage("transcribing");
 
       const { blob, durationMs: finalDuration } = await recorderRef.current.stop();
       setIsRecording(false);
@@ -155,49 +152,30 @@ export function VoiceRecorderSheet({
         await enqueueAudio(blob, finalDuration);
         setIsOfflineSaved(true);
         setIsProcessing(false);
-        setProcessingStage("");
         return;
       }
 
-      // Step 1: Transcribe via Groq Whisper API
+      // Single Unified Gemini 2.5 Flash Multimodal Pipeline
       const formData = new FormData();
       formData.append("audio", blob, "factory-voice.webm");
+      formData.append("currentDateISO", new Date().toISOString());
+      formData.append("timezoneOffset", "+07:00");
 
-      const transcribeRes = await fetch("/api/transcribe", {
+      const processRes = await fetch("/api/process-voice", {
         method: "POST",
         body: formData,
       });
 
-      if (!transcribeRes.ok) {
-        throw new Error("Gagal mentranskripsi suara. Coba lagi.");
+      if (!processRes.ok) {
+        throw new Error("Gagal memproses suara dengan Gemini AI. Coba lagi.");
       }
 
-      const transcribeData = await transcribeRes.json();
-      const transcript = transcribeData.transcript || "";
-      setRawTranscript(transcript);
+      const structured = await processRes.json();
 
-      // Step 2: Structure via Gemini 2.5 Flash API
-      setProcessingStage("structuring");
-
-      const structureRes = await fetch("/api/structure", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript,
-          currentDateISO: new Date().toISOString(),
-          timezoneOffset: "+07:00",
-        }),
-      });
-
-      if (!structureRes.ok) {
-        throw new Error("Gagal menstrukturkan catatan AI.");
-      }
-
-      const structured = await structureRes.json();
-
+      setRawTranscript(structured.rawTranscript || "");
       setTitle(structured.title || "Catatan Lapangan");
       setCategoryId(structured.categoryId || (categories[0]?.id || ""));
-      setFormattedContent(structured.formattedContent || transcript);
+      setFormattedContent(structured.formattedContent || structured.rawTranscript || "");
       setPriority(structured.priority || "normal");
 
       if (structured.dueDateISO) {
@@ -211,14 +189,12 @@ export function VoiceRecorderSheet({
       }
 
       setIsProcessing(false);
-      setProcessingStage("");
       setReviewReady(true);
     } catch (err: unknown) {
       console.error("Pipeline error:", err);
       const msg = err instanceof Error ? err.message : "Terjadi kesalahan sistem";
       setErrorMsg(msg);
       setIsProcessing(false);
-      setProcessingStage("");
     }
   };
 
@@ -393,14 +369,10 @@ export function VoiceRecorderSheet({
                     </div>
                     <div className="space-y-1">
                       <h4 className="font-bold text-base text-charcoal">
-                        {processingStage === "transcribing"
-                          ? "Mentranskripsi Suara Presisi..."
-                          : "AI Menata Struktur Catatan..."}
+                        Menganalisis Suara & Menata Catatan...
                       </h4>
                       <p className="text-xs text-charcoal/60">
-                        {processingStage === "transcribing"
-                          ? "Whisper memproses istilah teknis, angka, dan unit pabrik"
-                          : "Gemini 2.5 Flash memetakan divisi dan tenggat waktu"}
+                        Gemini 2.5 Flash memproses audio langsung menjadi log operasional presisi
                       </p>
                     </div>
                   </div>

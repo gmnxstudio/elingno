@@ -90,48 +90,48 @@ export default function Page() {
         if (!item.id) continue;
         await updateAudioStatus(item.id, "processing");
 
-        // 1. Transcribe
+        // 1. Single Unified Gemini 2.5 Flash Multimodal Processing
         const formData = new FormData();
         formData.append("audio", item.blob, "offline-voice.webm");
+        formData.append("currentDateISO", new Date().toISOString());
+        formData.append("timezoneOffset", "+07:00");
 
-        const tRes = await fetch("/api/transcribe", { method: "POST", body: formData });
-        if (!tRes.ok) continue;
+        const processRes = await fetch("/api/process-voice", { method: "POST", body: formData });
+        if (!processRes.ok) continue;
 
-        const { transcript } = await tRes.json();
+        const structured = await processRes.json();
 
-        // 2. Structure
-        const sRes = await fetch("/api/structure", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            transcript,
-            currentDateISO: new Date().toISOString(),
-            timezoneOffset: "+07:00",
-          }),
-        });
+        // 2. If this audio was queued as a follow-up note update
+        if (item.noteId) {
+          await fetch(`/api/notes/${item.noteId}/updates`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              content: structured.formattedContent || structured.rawTranscript,
+              sourceType: "voice",
+            }),
+          });
+        } else {
+          // Otherwise save as new parent note
+          let dueMs: number | null = null;
+          if (structured.dueDateISO) {
+            const d = new Date(structured.dueDateISO);
+            if (!isNaN(d.getTime())) dueMs = d.getTime();
+          }
 
-        if (!sRes.ok) continue;
-        const structured = await sRes.json();
-
-        // 3. Save
-        let dueMs: number | null = null;
-        if (structured.dueDateISO) {
-          const d = new Date(structured.dueDateISO);
-          if (!isNaN(d.getTime())) dueMs = d.getTime();
+          await fetch("/api/notes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: structured.title || "Catatan Sinkronisasi",
+              categoryId: structured.categoryId || null,
+              formattedContent: structured.formattedContent || structured.rawTranscript,
+              rawTranscript: structured.rawTranscript,
+              priority: structured.priority || "normal",
+              dueDate: dueMs,
+            }),
+          });
         }
-
-        await fetch("/api/notes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: structured.title || "Catatan Sinkronisasi",
-            categoryId: structured.categoryId || null,
-            formattedContent: structured.formattedContent || transcript,
-            rawTranscript: transcript,
-            priority: structured.priority || "normal",
-            dueDate: dueMs,
-          }),
-        });
 
         // Remove from Dexie
         await removePendingAudio(item.id);

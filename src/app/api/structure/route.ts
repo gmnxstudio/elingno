@@ -119,6 +119,7 @@ Transkrip Suara:
     const categoryId = validCategory ? validCategory.id : (allCategories[0]?.id || "cat-umum");
 
     return NextResponse.json({
+      rawTranscript: transcript,
       title: parsed.title || "Catatan Operasional",
       categoryId,
       formattedContent: parsed.formattedContent || transcript,

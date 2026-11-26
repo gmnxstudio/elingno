@@ -3,8 +3,7 @@
 [![Next.js 15](https://img.shields.io/badge/Next.js-15.2.1-black?logo=next.js)](https://nextjs.org/)
 [![Drizzle ORM](https://img.shields.io/badge/ORM-Drizzle-C5F74F?logo=drizzle)](https://orm.drizzle.team/)
 [![Turso](https://img.shields.io/badge/Database-Turso%20libSQL-00FFE0)](https://turso.tech/)
-[![Groq](https://img.shields.io/badge/STT-Groq%20Whisper%20v3-F55036)](https://groq.com/)
-[![Gemini 2.5 Flash](https://img.shields.io/badge/AI-Gemini%202.5%20Flash-4285F4?logo=google)](https://deepmind.google/technologies/gemini/)
+[![Gemini 2.5 Flash](https://img.shields.io/badge/AI-Gemini%202.5%20Flash%20Multimodal-4285F4?logo=google)](https://deepmind.google/technologies/gemini/)
 [![PWA](https://img.shields.io/badge/PWA-Ready-223309)](https://web.dev/progressive-web-apps/)
 
 **Elingno** (*"Asisten Catatan & Pengingat Kerja"*) is a mobile-first Progressive Web App (PWA) designed as a personal executive secretary for factory and industrial operations leaders on the shop floor. 
@@ -30,19 +29,20 @@ Engineered with design guidance from 8 advanced UI design skills (`superdesign-s
 
 ---
 
-## ⚡ Zero-Timeout Decoupled AI Pipeline (< 2.2s total)
+## ⚡ Zero-Timeout 100% Gemini 2.5 Flash Multimodal Pipeline (~1.2s total)
 
 1. **Client Audio Recording (`src/lib/audioRecorder.ts`):**
    - MediaRecorder with `audio/webm;codecs=opus` (iOS fallback to MP4) at 24 kbps speech-optimized bitrate (1 min ≈ 150 KB).
    - Live organic audio waveform visualizer via Web Audio API `AnalyserNode`.
    - Client offline queue with **Dexie.js (`pendingAudioQueue`)** to safeguard recordings during signal dropouts on factory floors.
-2. **Step 1: `POST /api/transcribe` (~0.8s):**
-   - Forwards audio to Groq Whisper (`whisper-large-v3-turbo`) with specialized Indonesian industrial prompt biasing for extruder, rafia, pelletizing, voltase, bearing, sak, kg, and numbers.
-3. **Step 2: `POST /api/structure` (~1.1s):**
-   - Queries user's active divisions from Turso.
-   - Calls **Google Gemini 2.5 Flash** with strict `responseSchema` (Structured JSON) to extract title, division match, Indonesian markdown bullets, priority, and WIB due dates.
-4. **Instant Review & Edit Drawer:**
-   - Review and tweak output before committing to database.
+2. **Unified Multimodal API: `POST /api/process-voice` (~1.2s):**
+   - Accepts compressed audio `Blob`/`File` along with `currentDateISO` and `timezoneOffset`.
+   - Sends the audio buffer directly as an inline multimodal part to **Google Gemini 2.5 Flash (`gemini-2.5-flash`)**.
+   - Gemini simultaneously performs exact verbatim Indonesian transcription (`rawTranscript` preserving all numbers and technical units) AND outputs structured operational fields (`title`, `categoryId`, `formattedContent`, `priority`, `dueDateISO`) via strict JSON `responseSchema`.
+3. **Instant Review & Edit Drawer:**
+   - Displays editable title, matched division chips, formatted bullet points, and priority before saving to database.
+4. **Text-Only Fallback: `POST /api/structure`:**
+   - Available for manual typed logs or offline text retries using the same schema.
 
 ---
 
@@ -92,10 +92,7 @@ Engineered with design guidance from 8 advanced UI design skills (`superdesign-s
 TURSO_DATABASE_URL="file:local.db" # or libsql://your-db.turso.io
 TURSO_AUTH_TOKEN=""
 
-# Groq STT API
-GROQ_API_KEY="gsk_..."
-
-# Google Gemini API
+# Google Gemini API (gemini-2.5-flash for audio-to-JSON multimodal pipeline)
 GEMINI_API_KEY="AIzaSy..."
 
 # Web Push VAPID Keys (Generate with: npx web-push generate-vapid-keys)

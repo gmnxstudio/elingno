@@ -155,17 +155,19 @@ export function NoteDetailDrawer({ noteId, onClose, onUpdated }: NoteDetailDrawe
 
       const formData = new FormData();
       formData.append("audio", blob, "followup.webm");
+      formData.append("currentDateISO", new Date().toISOString());
+      formData.append("timezoneOffset", "+07:00");
 
-      const res = await fetch("/api/transcribe", {
+      const res = await fetch("/api/process-voice", {
         method: "POST",
         body: formData,
       });
 
       if (res.ok) {
         const data = await res.json();
-        const transcript = data.transcript || "";
-        if (transcript) {
-          await handleAddUpdate(transcript, "voice");
+        const updateContent = data.formattedContent || data.rawTranscript || "";
+        if (updateContent) {
+          await handleAddUpdate(updateContent, "voice");
         }
       }
     } catch (err) {
